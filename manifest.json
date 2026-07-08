@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Open Tabs Store",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Automatically backs up your open tabs locally and lets you restore them after a crash.",
   "permissions": ["tabs", "storage", "alarms"],
   "background": {
