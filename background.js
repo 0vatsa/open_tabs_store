@@ -6,8 +6,23 @@ let saveTimeout = null;
 
 function isRestorableUrl(url) {
   if (!url) return false;
-  const blocked = ["chrome://", "chrome-extension://", "devtools://", "brave://", "edge://"];
-  return !blocked.some((prefix) => url.startsWith(prefix));
+  const blocked = [
+    "chrome://",
+    "chrome-extension://",
+    "devtools://",
+    "brave://",
+    "edge://",
+    "moz-extension://",
+    "resource://",
+    "jar:"
+  ];
+  if (blocked.some((prefix) => url.startsWith(prefix))) {
+    return false;
+  }
+  if (url.startsWith("about:")) {
+    return url === "about:blank" || url.startsWith("about:blank#");
+  }
+  return true;
 }
 
 async function captureSession() {

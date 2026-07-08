@@ -5,7 +5,14 @@
   "description": "Automatically backs up your open tabs locally and lets you restore them after a crash.",
   "permissions": ["tabs", "storage", "alarms"],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "open-tabs-store@local",
+      "strict_min_version": "121.0"
+    }
   },
   "action": {
     "default_popup": "popup.html",
