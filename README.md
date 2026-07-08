@@ -1,13 +1,13 @@
 # Open Tabs Store
 
-A lightweight Chrome/Brave extension that automatically backs up your open tab metadata to local browser storage and lets you restore your session after a crash.
+A lightweight browser extension that automatically backs up your open tab metadata to local browser storage and lets you restore your session after a crash.
 
 ## Features
 
 - Auto-saves tab URLs, titles, window layout, pinned tabs, and active tab per window
 - Stores the latest backup in `chrome.storage.local`
 - Manual **Backup now** and **Restore all tabs** actions from the popup
-- Works in Chromium browsers including Chrome and Brave
+- Works in Chromium browsers (Chrome, Brave) and Firefox-based browsers (Firefox, LibreWolf)
 
 ## Install
 
@@ -24,6 +24,22 @@ A lightweight Chrome/Brave extension that automatically backs up your open tab m
 2. Enable **Developer mode**
 3. Click **Load unpacked**
 4. Select this repository folder
+
+### Firefox
+
+1. Open `about:debugging`
+2. Click **This Firefox**
+3. Click **Load Temporary Add-on…**
+4. Select `manifest.json` from this repository folder
+
+### LibreWolf
+
+1. Open `about:debugging`
+2. Click **This Firefox**
+3. Click **Load Temporary Add-on…**
+4. Select `manifest.json` from this repository folder
+
+Temporary add-ons in Firefox and LibreWolf expire when the browser restarts. Reload the extension from `about:debugging` after restarting.
 
 ## Usage
 
@@ -57,12 +73,23 @@ Per window:
 ## Limitations
 
 - Incognito tabs are not backed up unless you explicitly allow the extension in incognito mode.
-- Internal browser URLs such as `chrome://`, `brave://`, `edge://`, `devtools://`, and `chrome-extension://` cannot be restored and are skipped.
+- Internal browser URLs cannot be restored and are skipped, including:
+  - Chromium: `chrome://`, `brave://`, `edge://`, `devtools://`, and `chrome-extension://`
+  - Firefox/LibreWolf: `about:` (except `about:blank`), `moz-extension://`, `resource://`, and `jar:`
 - Only the latest backup is kept in v1.
 
 ## Development
 
-No build step is required. Edit the files and click **Reload** on the extension card in `chrome://extensions` or `brave://extensions`.
+No build step is required. Edit the files and reload the extension:
+
+- Chrome/Brave: click **Reload** on the extension card in `chrome://extensions` or `brave://extensions`
+- Firefox/LibreWolf: reload from `about:debugging` (temporary add-ons must be reloaded after a browser restart)
+
+Run validation checks with:
+
+```bash
+node scripts/validate-extension.js
+```
 
 ## File overview
 

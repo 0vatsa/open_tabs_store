@@ -18,6 +18,14 @@ assert(manifest.permissions.includes("tabs"), "tabs permission required");
 assert(manifest.permissions.includes("storage"), "storage permission required");
 assert(manifest.permissions.includes("alarms"), "alarms permission required");
 assert(manifest.background?.service_worker === "background.js", "background service worker missing");
+assert(
+  manifest.background?.scripts?.includes("background.js"),
+  "background scripts must include background.js for Firefox"
+);
+assert(
+  manifest.browser_specific_settings?.gecko?.id,
+  "browser_specific_settings.gecko.id required for Firefox"
+);
 
 for (const icon of ["icons/icon16.png", "icons/icon48.png", "icons/icon128.png"]) {
   assert(fs.existsSync(path.join(root, icon)), `Missing icon: ${icon}`);
@@ -40,8 +48,23 @@ assert(popupJs.includes("window.confirm"), "restore confirmation missing");
 
 function isRestorableUrl(url) {
   if (!url) return false;
-  const blocked = ["chrome://", "chrome-extension://", "devtools://", "brave://", "edge://"];
-  return !blocked.some((prefix) => url.startsWith(prefix));
+  const blocked = [
+    "chrome://",
+    "chrome-extension://",
+    "devtools://",
+    "brave://",
+    "edge://",
+    "moz-extension://",
+    "resource://",
+    "jar:"
+  ];
+  if (blocked.some((prefix) => url.startsWith(prefix))) {
+    return false;
+  }
+  if (url.startsWith("about:")) {
+    return url === "about:blank" || url.startsWith("about:blank#");
+  }
+  return true;
 }
 
 const sampleBackup = {
@@ -51,7 +74,9 @@ const sampleBackup = {
       state: "normal",
       tabs: [
         { url: "https://example.com", pinned: true, active: true },
-        { url: "chrome://settings", pinned: false, active: false }
+        { url: "chrome://settings", pinned: false, active: false },
+        { url: "about:preferences", pinned: false, active: false },
+        { url: "about:blank", pinned: false, active: false }
       ]
     }
   ]
@@ -66,7 +91,7 @@ for (const win of sampleBackup.windows) {
   }
 }
 
-assert(restorable === 1, "expected one restorable tab in sample backup");
-assert(skipped === 1, "expected one skipped tab in sample backup");
+assert(restorable === 2, "expected two restorable tabs in sample backup");
+assert(skipped === 2, "expected two skipped tabs in sample backup");
 
 console.log("Extension validation checks passed.");
