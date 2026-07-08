@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Open Tabs Store</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header>
+        <h1>Open Tabs Store</h1>
+        <p class="subtitle">Local tab backup and restore</p>
+      </header>
+
+      <section class="status-card">
+        <div class="status-row">
+          <span class="label">Current tabs</span>
+          <span id="current-tab-count" class="value">-</span>
+        </div>
+        <div class="status-row">
+          <span class="label">Current windows</span>
+          <span id="current-window-count" class="value">-</span>
+        </div>
+        <div class="status-row">
+          <span class="label">Last backup</span>
+          <span id="last-backup-time" class="value">Never</span>
+        </div>
+        <div class="status-row">
+          <span class="label">Backed up tabs</span>
+          <span id="backup-tab-count" class="value">-</span>
+        </div>
+        <div class="status-row">
+          <span class="label">Backed up windows</span>
+          <span id="backup-window-count" class="value">-</span>
+        </div>
+      </section>
+
+      <p id="feedback" class="feedback" hidden></p>
+
+      <div class="actions">
+        <button id="backup-now" type="button">Backup now</button>
+        <button id="restore-tabs" type="button" class="secondary" disabled>Restore all tabs</button>
+      </div>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
