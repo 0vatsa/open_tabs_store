@@ -34,13 +34,22 @@
           <span class="label">Backed up windows</span>
           <span id="backup-window-count" class="value">-</span>
         </div>
+        <div class="status-row">
+          <span class="label">Snapshots stored</span>
+          <span id="snapshot-count" class="value">-</span>
+        </div>
+      </section>
+
+      <section class="snapshot-section">
+        <h2 class="section-title">Snapshot history</h2>
+        <p class="section-note">Auto snapshots every minute. Kept for 24 hours.</p>
+        <div id="snapshot-list" class="snapshot-list" aria-live="polite"></div>
       </section>
 
       <p id="feedback" class="feedback" hidden></p>
 
       <div class="actions">
         <button id="backup-now" type="button">Backup now</button>
-        <button id="restore-tabs" type="button" class="secondary" disabled>Restore all tabs</button>
       </div>
     </main>
 

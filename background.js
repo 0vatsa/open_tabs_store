@@ -1,8 +1,7 @@
-const STORAGE_KEY = "latestBackup";
-const DEBOUNCE_MS = 2000;
-const PERIODIC_ALARM = "periodicBackup";
-
-let saveTimeout = null;
+const STORAGE_KEY = "snapshots";
+const LEGACY_STORAGE_KEY = "latestBackup";
+const RETENTION_MS = 24 * 60 * 60 * 1000;
+const AUTO_BACKUP_ALARM = "autoBackup";
 
 function isRestorableUrl(url) {
   if (!url) return false;
@@ -32,7 +31,6 @@ async function captureSession() {
   });
 
   return {
-    savedAt: Date.now(),
     tabCount: windows.reduce((count, win) => count + win.tabs.length, 0),
     windows: windows.map((win) => ({
       focused: win.focused,
@@ -50,23 +48,74 @@ async function captureSession() {
   };
 }
 
-async function saveBackup() {
-  const backup = await captureSession();
-  await chrome.storage.local.set({ [STORAGE_KEY]: backup });
-  return backup;
+function pruneExpiredSnapshots(snapshots) {
+  const cutoff = Date.now() - RETENTION_MS;
+  return snapshots.filter((snapshot) => snapshot.savedAt > cutoff);
 }
 
-function scheduleSave() {
-  if (saveTimeout) {
-    clearTimeout(saveTimeout);
+function sortSnapshotsNewestFirst(snapshots) {
+  return [...snapshots].sort((a, b) => b.savedAt - a.savedAt);
+}
+
+async function migrateLegacyBackup() {
+  const result = await chrome.storage.local.get([STORAGE_KEY, LEGACY_STORAGE_KEY]);
+  const snapshots = result[STORAGE_KEY] || [];
+  const legacyBackup = result[LEGACY_STORAGE_KEY];
+
+  if (snapshots.length > 0 || !legacyBackup) {
+    return snapshots;
   }
 
-  saveTimeout = setTimeout(() => {
-    saveTimeout = null;
-    saveBackup().catch((error) => {
-      console.error("Failed to save tab backup:", error);
-    });
-  }, DEBOUNCE_MS);
+  const migratedSnapshot = {
+    id: crypto.randomUUID(),
+    savedAt: legacyBackup.savedAt || Date.now(),
+    source: "auto",
+    tabCount: legacyBackup.tabCount ?? 0,
+    windows: legacyBackup.windows || []
+  };
+
+  await chrome.storage.local.set({ [STORAGE_KEY]: [migratedSnapshot] });
+  await chrome.storage.local.remove(LEGACY_STORAGE_KEY);
+  return [migratedSnapshot];
+}
+
+async function loadSnapshots() {
+  const snapshots = await migrateLegacyBackup();
+  const pruned = pruneExpiredSnapshots(snapshots);
+
+  if (pruned.length !== snapshots.length) {
+    await chrome.storage.local.set({ [STORAGE_KEY]: pruned });
+  }
+
+  return sortSnapshotsNewestFirst(pruned);
+}
+
+async function persistSnapshots(snapshots) {
+  const pruned = pruneExpiredSnapshots(snapshots);
+  await chrome.storage.local.set({ [STORAGE_KEY]: pruned });
+  return pruned;
+}
+
+async function addSnapshot(source) {
+  const session = await captureSession();
+  const snapshot = {
+    id: crypto.randomUUID(),
+    savedAt: Date.now(),
+    source,
+    tabCount: session.tabCount,
+    windows: session.windows
+  };
+
+  const snapshots = await loadSnapshots();
+  snapshots.push(snapshot);
+  const persisted = await persistSnapshots(snapshots);
+  const saved = persisted.find((item) => item.id === snapshot.id) || snapshot;
+  return saved;
+}
+
+async function getSnapshotById(id) {
+  const snapshots = await loadSnapshots();
+  return snapshots.find((snapshot) => snapshot.id === id) || null;
 }
 
 function countRestorableTabs(backup) {
@@ -84,6 +133,19 @@ function countRestorableTabs(backup) {
   }
 
   return { restorable, skipped };
+}
+
+function summarizeSnapshot(snapshot) {
+  const counts = countRestorableTabs(snapshot);
+  return {
+    id: snapshot.id,
+    savedAt: snapshot.savedAt,
+    source: snapshot.source,
+    tabCount: snapshot.tabCount,
+    windowCount: snapshot.windows.length,
+    restorableTabCount: counts.restorable,
+    skippedTabCount: counts.skipped
+  };
 }
 
 async function restoreSession(backup) {
@@ -140,66 +202,45 @@ async function restoreSession(backup) {
 }
 
 async function getStatus() {
-  const [backupResult, windows] = await Promise.all([
-    chrome.storage.local.get(STORAGE_KEY),
+  const [snapshots, windows] = await Promise.all([
+    loadSnapshots(),
     chrome.windows.getAll({ populate: true, windowTypes: ["normal"] })
   ]);
 
-  const backup = backupResult[STORAGE_KEY] || null;
+  const latest = snapshots[0] || null;
   const currentTabCount = windows.reduce((count, win) => count + win.tabs.length, 0);
 
   return {
-    savedAt: backup?.savedAt ?? null,
-    tabCount: backup?.tabCount ?? null,
-    windowCount: backup?.windows?.length ?? null,
+    savedAt: latest?.savedAt ?? null,
+    source: latest?.source ?? null,
+    tabCount: latest?.tabCount ?? null,
+    windowCount: latest?.windows?.length ?? null,
     currentTabCount,
     currentWindowCount: windows.length,
-    restorableTabCount: backup ? countRestorableTabs(backup).restorable : 0,
-    skippedTabCount: backup ? countRestorableTabs(backup).skipped : 0
+    restorableTabCount: latest ? countRestorableTabs(latest).restorable : 0,
+    skippedTabCount: latest ? countRestorableTabs(latest).skipped : 0,
+    snapshotCount: snapshots.length
   };
 }
 
-function registerEventListeners() {
-  const tabEvents = [
-    chrome.tabs.onCreated,
-    chrome.tabs.onRemoved,
-    chrome.tabs.onMoved,
-    chrome.tabs.onAttached,
-    chrome.tabs.onDetached
-  ];
+async function getSnapshots() {
+  const snapshots = await loadSnapshots();
+  return snapshots.map(summarizeSnapshot);
+}
 
-  for (const event of tabEvents) {
-    event.addListener(() => scheduleSave());
-  }
-
-  chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => {
-    if (changeInfo.url || changeInfo.title || changeInfo.pinned) {
-      scheduleSave();
-    }
-  });
-
-  const windowEvents = [
-    chrome.windows.onCreated,
-    chrome.windows.onRemoved,
-    chrome.windows.onFocusChanged
-  ];
-
-  for (const event of windowEvents) {
-    event.addListener(() => scheduleSave());
-  }
+async function runAutoBackup() {
+  await loadSnapshots();
+  await addSnapshot("auto");
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.alarms.create(PERIODIC_ALARM, { periodInMinutes: 5 });
-  saveBackup().catch((error) => {
-    console.error("Failed to create initial tab backup:", error);
-  });
+  chrome.alarms.create(AUTO_BACKUP_ALARM, { periodInMinutes: 1 });
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === PERIODIC_ALARM) {
-    saveBackup().catch((error) => {
-      console.error("Failed to run periodic tab backup:", error);
+  if (alarm.name === AUTO_BACKUP_ALARM) {
+    runAutoBackup().catch((error) => {
+      console.error("Failed to run auto snapshot:", error);
     });
   }
 });
@@ -208,25 +249,31 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const handleMessage = async () => {
     switch (message.type) {
       case "BACKUP_NOW": {
-        const backup = await saveBackup();
+        const snapshot = await addSnapshot("manual");
         return {
           ok: true,
-          savedAt: backup.savedAt,
-          tabCount: backup.tabCount,
-          windowCount: backup.windows.length
+          id: snapshot.id,
+          savedAt: snapshot.savedAt,
+          source: snapshot.source,
+          tabCount: snapshot.tabCount,
+          windowCount: snapshot.windows.length
         };
       }
       case "GET_STATUS":
         return { ok: true, ...(await getStatus()) };
+      case "GET_SNAPSHOTS":
+        return { ok: true, snapshots: await getSnapshots() };
       case "RESTORE": {
-        const result = await chrome.storage.local.get(STORAGE_KEY);
-        const backup = result[STORAGE_KEY];
-
-        if (!backup) {
-          return { ok: false, error: "No backup found." };
+        if (!message.snapshotId) {
+          return { ok: false, error: "No snapshot selected." };
         }
 
-        const restoreResult = await restoreSession(backup);
+        const snapshot = await getSnapshotById(message.snapshotId);
+        if (!snapshot) {
+          return { ok: false, error: "Snapshot not found or expired." };
+        }
+
+        const restoreResult = await restoreSession(snapshot);
         return { ok: true, ...restoreResult };
       }
       default:
@@ -242,10 +289,4 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     });
 
   return true;
-});
-
-registerEventListeners();
-
-saveBackup().catch((error) => {
-  console.error("Failed to save startup tab backup:", error);
 });
