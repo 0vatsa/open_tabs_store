@@ -4,7 +4,7 @@ A lightweight browser extension that automatically backs up your open tab metada
 
 ## Features
 
-- Auto-saves tab URLs, titles, window layout, pinned tabs, and active tab per window every minute
+- Auto-saves tab URLs, titles, window layout, pinned tabs, and active tab per window on a configurable interval (default: every 5 minutes)
 - Keeps a rolling 24-hour snapshot history in `chrome.storage.local`
 - Manual **Backup now** snapshots are saved immediately and labeled separately from auto backups
 - Restore any stored snapshot from the popup history list
@@ -45,12 +45,13 @@ Temporary add-ons in Firefox and LibreWolf expire when the browser restarts. Rel
 ## Usage
 
 1. Keep the extension installed while you browse normally.
-2. The extension auto-saves a snapshot every minute.
+2. The extension auto-saves a snapshot on your chosen interval (default: every 5 minutes).
 3. Click the extension icon to see:
    - current tab/window counts
    - last backup time
    - backed up tab/window counts
    - snapshot history with **Manual** and **Auto** labels
+   - an input to set the auto-backup interval in minutes
 4. Use **Backup now** before risky changes if you want an immediate manual snapshot.
 5. After a crash, pick the snapshot you want from the history list and click **Restore**.
 
@@ -81,7 +82,7 @@ Per snapshot:
 
 ## Snapshot retention
 
-- Auto snapshots are created every 1 minute.
+- Auto snapshots are created on a configurable minute interval (default: every 5 minutes). Set the interval in the popup; `1` means every minute, `5` means every 5 minutes.
 - Snapshots are kept for 24 hours from their save time.
 - Example: a snapshot saved at 13:14 on Aug 21 is removed at/after 13:14 on Aug 22.
 - Manual snapshots follow the same 24-hour retention rule.

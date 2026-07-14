@@ -5,8 +5,14 @@ const backupTabCountEl = document.getElementById("backup-tab-count");
 const backupWindowCountEl = document.getElementById("backup-window-count");
 const snapshotCountEl = document.getElementById("snapshot-count");
 const snapshotListEl = document.getElementById("snapshot-list");
+const sectionNoteEl = document.getElementById("section-note");
+const backupIntervalInput = document.getElementById("backup-interval");
 const feedbackEl = document.getElementById("feedback");
 const backupNowButton = document.getElementById("backup-now");
+
+const DEFAULT_BACKUP_INTERVAL_MINUTES = 5;
+
+let currentBackupIntervalMinutes = DEFAULT_BACKUP_INTERVAL_MINUTES;
 
 function formatTimestamp(timestamp) {
   if (!timestamp) {
@@ -18,6 +24,10 @@ function formatTimestamp(timestamp) {
 
 function formatSource(source) {
   return source === "manual" ? "Manual" : "Auto";
+}
+
+function formatIntervalLabel(minutes) {
+  return minutes === 1 ? "1 minute" : `${minutes} minutes`;
 }
 
 function showFeedback(message, isError = false) {
@@ -36,6 +46,12 @@ function sendMessage(message) {
   return chrome.runtime.sendMessage(message);
 }
 
+function updateIntervalCopy(minutes) {
+  currentBackupIntervalMinutes = minutes;
+  backupIntervalInput.value = String(minutes);
+  sectionNoteEl.textContent = `Auto snapshots every ${formatIntervalLabel(minutes)}. Kept for 24 hours.`;
+}
+
 function updateStatus(status) {
   currentTabCountEl.textContent = String(status.currentTabCount ?? 0);
   currentWindowCountEl.textContent = String(status.currentWindowCount ?? 0);
@@ -43,6 +59,9 @@ function updateStatus(status) {
   backupTabCountEl.textContent = status.tabCount == null ? "-" : String(status.tabCount);
   backupWindowCountEl.textContent = status.windowCount == null ? "-" : String(status.windowCount);
   snapshotCountEl.textContent = String(status.snapshotCount ?? 0);
+
+  const minutes = status.backupIntervalMinutes ?? DEFAULT_BACKUP_INTERVAL_MINUTES;
+  updateIntervalCopy(minutes);
 }
 
 function renderSnapshots(snapshots) {
@@ -51,7 +70,7 @@ function renderSnapshots(snapshots) {
   if (!snapshots.length) {
     const empty = document.createElement("p");
     empty.className = "snapshot-empty";
-    empty.textContent = "No snapshots yet. Auto backups run every minute.";
+    empty.textContent = `No snapshots yet. Auto backups run every ${formatIntervalLabel(currentBackupIntervalMinutes)}.`;
     snapshotListEl.appendChild(empty);
     return;
   }
@@ -114,6 +133,23 @@ async function refreshAll() {
   await Promise.all([refreshStatus(), refreshSnapshots()]);
 }
 
+async function saveBackupInterval() {
+  const response = await sendMessage({
+    type: "SET_BACKUP_INTERVAL",
+    minutes: backupIntervalInput.value
+  });
+
+  if (!response?.ok) {
+    showFeedback(response?.error || "Failed to update backup interval.", true);
+    backupIntervalInput.value = String(currentBackupIntervalMinutes);
+    return;
+  }
+
+  updateIntervalCopy(response.backupIntervalMinutes);
+  showFeedback(`Auto backup every ${formatIntervalLabel(response.backupIntervalMinutes)}.`);
+  await refreshSnapshots();
+}
+
 async function restoreSnapshot(snapshot) {
   clearFeedback();
 
@@ -145,6 +181,20 @@ async function restoreSnapshot(snapshot) {
   );
   await refreshAll();
 }
+
+backupIntervalInput.addEventListener("change", () => {
+  saveBackupInterval().catch((error) => {
+    showFeedback(error.message || "Failed to update backup interval.", true);
+    backupIntervalInput.value = String(currentBackupIntervalMinutes);
+  });
+});
+
+backupIntervalInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    backupIntervalInput.blur();
+  }
+});
 
 backupNowButton.addEventListener("click", async () => {
   clearFeedback();
