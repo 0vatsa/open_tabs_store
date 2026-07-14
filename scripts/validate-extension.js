@@ -33,24 +33,31 @@ for (const icon of ["icons/icon16.png", "icons/icon48.png", "icons/icon128.png"]
 
 const background = fs.readFileSync(path.join(root, "background.js"), "utf8");
 assert(background.includes('STORAGE_KEY = "snapshots"'), "background must use snapshots storage key");
+assert(background.includes("DEFAULT_BACKUP_INTERVAL_MINUTES = 5"), "default backup interval must be 5 minutes");
+assert(background.includes("normalizeIntervalMinutes"), "normalizeIntervalMinutes missing");
+assert(background.includes("getBackupIntervalMinutes"), "getBackupIntervalMinutes missing");
+assert(background.includes("setBackupIntervalMinutes"), "setBackupIntervalMinutes missing");
+assert(background.includes("scheduleAutoBackup"), "scheduleAutoBackup missing");
 assert(background.includes("captureSession"), "captureSession missing");
 assert(background.includes("restoreSession"), "restoreSession missing");
 assert(background.includes("addSnapshot"), "addSnapshot missing");
 assert(background.includes("pruneExpiredSnapshots"), "pruneExpiredSnapshots missing");
-assert(background.includes('periodInMinutes: 1'), "auto backup alarm must run every minute");
 assert(background.includes("BACKUP_NOW"), "BACKUP_NOW handler missing");
 assert(background.includes("GET_STATUS"), "GET_STATUS handler missing");
 assert(background.includes("GET_SNAPSHOTS"), "GET_SNAPSHOTS handler missing");
+assert(background.includes("SET_BACKUP_INTERVAL"), "SET_BACKUP_INTERVAL handler missing");
 assert(background.includes("RESTORE"), "RESTORE handler missing");
 assert(!background.includes("scheduleSave"), "event-driven scheduleSave should be removed");
 
 const popupHtml = fs.readFileSync(path.join(root, "popup.html"), "utf8");
 assert(popupHtml.includes('id="backup-now"'), "backup button missing");
 assert(popupHtml.includes('id="snapshot-list"'), "snapshot list missing");
+assert(popupHtml.includes('id="backup-interval"'), "backup interval input missing");
 
 const popupJs = fs.readFileSync(path.join(root, "popup.js"), "utf8");
 assert(popupJs.includes("window.confirm"), "restore confirmation missing");
 assert(popupJs.includes("GET_SNAPSHOTS"), "popup must request snapshot list");
+assert(popupJs.includes("SET_BACKUP_INTERVAL"), "popup must set backup interval");
 assert(popupJs.includes("snapshotId"), "popup must send snapshotId on restore");
 
 function isRestorableUrl(url) {

@@ -42,8 +42,23 @@
 
       <section class="snapshot-section">
         <h2 class="section-title">Snapshot history</h2>
-        <p class="section-note">Auto snapshots every minute. Kept for 24 hours.</p>
+        <p id="section-note" class="section-note">Auto snapshots every 5 minutes. Kept for 24 hours.</p>
         <div id="snapshot-list" class="snapshot-list" aria-live="polite"></div>
+      </section>
+
+      <section class="interval-section">
+        <label class="interval-label" for="backup-interval">
+          Auto backup every
+          <input
+            id="backup-interval"
+            class="interval-input"
+            type="number"
+            min="1"
+            step="1"
+            value="5"
+          />
+          minutes
+        </label>
       </section>
 
       <p id="feedback" class="feedback" hidden></p>

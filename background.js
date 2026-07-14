@@ -1,7 +1,42 @@
 const STORAGE_KEY = "snapshots";
 const LEGACY_STORAGE_KEY = "latestBackup";
+const INTERVAL_KEY = "backupIntervalMinutes";
+const DEFAULT_BACKUP_INTERVAL_MINUTES = 5;
 const RETENTION_MS = 24 * 60 * 60 * 1000;
 const AUTO_BACKUP_ALARM = "autoBackup";
+
+function normalizeIntervalMinutes(value) {
+  const minutes = Number.parseInt(value, 10);
+  if (!Number.isFinite(minutes) || minutes < 1) {
+    return DEFAULT_BACKUP_INTERVAL_MINUTES;
+  }
+  return minutes;
+}
+
+async function getBackupIntervalMinutes() {
+  const result = await chrome.storage.local.get(INTERVAL_KEY);
+  if (result[INTERVAL_KEY] == null) {
+    return DEFAULT_BACKUP_INTERVAL_MINUTES;
+  }
+  return normalizeIntervalMinutes(result[INTERVAL_KEY]);
+}
+
+async function setBackupIntervalMinutes(minutes) {
+  const normalized = normalizeIntervalMinutes(minutes);
+  await chrome.storage.local.set({ [INTERVAL_KEY]: normalized });
+  return normalized;
+}
+
+async function scheduleAutoBackup(minutes) {
+  const periodInMinutes = normalizeIntervalMinutes(minutes);
+  await chrome.alarms.create(AUTO_BACKUP_ALARM, { periodInMinutes });
+  return periodInMinutes;
+}
+
+async function ensureAutoBackupScheduled() {
+  const minutes = await getBackupIntervalMinutes();
+  return scheduleAutoBackup(minutes);
+}
 
 function isRestorableUrl(url) {
   if (!url) return false;
@@ -202,9 +237,10 @@ async function restoreSession(backup) {
 }
 
 async function getStatus() {
-  const [snapshots, windows] = await Promise.all([
+  const [snapshots, windows, backupIntervalMinutes] = await Promise.all([
     loadSnapshots(),
-    chrome.windows.getAll({ populate: true, windowTypes: ["normal"] })
+    chrome.windows.getAll({ populate: true, windowTypes: ["normal"] }),
+    getBackupIntervalMinutes()
   ]);
 
   const latest = snapshots[0] || null;
@@ -219,7 +255,8 @@ async function getStatus() {
     currentWindowCount: windows.length,
     restorableTabCount: latest ? countRestorableTabs(latest).restorable : 0,
     skippedTabCount: latest ? countRestorableTabs(latest).skipped : 0,
-    snapshotCount: snapshots.length
+    snapshotCount: snapshots.length,
+    backupIntervalMinutes
   };
 }
 
@@ -234,7 +271,13 @@ async function runAutoBackup() {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.alarms.create(AUTO_BACKUP_ALARM, { periodInMinutes: 1 });
+  ensureAutoBackupScheduled().catch((error) => {
+    console.error("Failed to schedule auto backup on install:", error);
+  });
+});
+
+ensureAutoBackupScheduled().catch((error) => {
+  console.error("Failed to schedule auto backup on startup:", error);
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -263,6 +306,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return { ok: true, ...(await getStatus()) };
       case "GET_SNAPSHOTS":
         return { ok: true, snapshots: await getSnapshots() };
+      case "SET_BACKUP_INTERVAL": {
+        const minutes = await setBackupIntervalMinutes(message.minutes);
+        await scheduleAutoBackup(minutes);
+        return { ok: true, backupIntervalMinutes: minutes };
+      }
       case "RESTORE": {
         if (!message.snapshotId) {
           return { ok: false, error: "No snapshot selected." };
