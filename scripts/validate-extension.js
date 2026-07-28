@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const vm = require("vm");
 
 const root = path.resolve(__dirname, "..");
 
@@ -108,4 +109,239 @@ for (const win of sampleBackup.windows) {
 assert(restorable === 2, "expected two restorable tabs in sample backup");
 assert(skipped === 2, "expected two skipped tabs in sample backup");
 
-console.log("Extension validation checks passed.");
+function flushAsyncWork() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+async function validateAlarmScheduling() {
+  const originalScheduledTime = 123456789;
+  const storageData = {
+    backupIntervalMinutes: 5,
+    snapshots: []
+  };
+  const createCalls = [];
+  let activeAlarm = {
+    name: "autoBackup",
+    periodInMinutes: 5,
+    scheduledTime: originalScheduledTime
+  };
+  let messageListener;
+
+  const chromeMock = {
+    storage: {
+      local: {
+        async get(keys) {
+          const requestedKeys = Array.isArray(keys) ? keys : [keys];
+          return Object.fromEntries(
+            requestedKeys
+              .filter((key) => storageData[key] !== undefined)
+              .map((key) => [key, storageData[key]])
+          );
+        },
+        async set(values) {
+          Object.assign(storageData, values);
+        },
+        async remove(key) {
+          delete storageData[key];
+        }
+      }
+    },
+    alarms: {
+      async get(name) {
+        return activeAlarm?.name === name ? { ...activeAlarm } : undefined;
+      },
+      async create(name, options) {
+        createCalls.push({ name, options });
+        activeAlarm = {
+          name,
+          periodInMinutes: options.periodInMinutes,
+          scheduledTime: Date.now() + options.periodInMinutes * 60 * 1000
+        };
+      },
+      onAlarm: {
+        addListener() {}
+      }
+    },
+    runtime: {
+      onInstalled: {
+        addListener() {}
+      },
+      onMessage: {
+        addListener(listener) {
+          messageListener = listener;
+        }
+      }
+    },
+    windows: {
+      async getAll() {
+        return [];
+      },
+      async create() {
+        return { id: 1 };
+      }
+    },
+    tabs: {
+      async query() {
+        return [];
+      },
+      async update() {}
+    }
+  };
+
+  function startServiceWorker() {
+    vm.runInNewContext(background, {
+      chrome: chromeMock,
+      console,
+      crypto: { randomUUID: () => "test-id" }
+    });
+  }
+
+  startServiceWorker();
+  await flushAsyncWork();
+  startServiceWorker();
+  await flushAsyncWork();
+
+  assert(createCalls.length === 0, "matching alarm must not be recreated on service-worker restart");
+  assert(
+    activeAlarm.scheduledTime === originalScheduledTime,
+    "service-worker restart must preserve the alarm's scheduled time"
+  );
+
+  const intervalResponse = await new Promise((resolve) => {
+    const keepsChannelOpen = messageListener(
+      { type: "SET_BACKUP_INTERVAL", minutes: 10 },
+      {},
+      resolve
+    );
+    assert(keepsChannelOpen === true, "message handler must keep the response channel open");
+  });
+
+  assert(intervalResponse.ok, "interval update must succeed");
+  assert(createCalls.length === 1, "changing the interval must replace the alarm once");
+  assert(createCalls[0].options.periodInMinutes === 10, "replacement alarm must use the new interval");
+
+  startServiceWorker();
+  await flushAsyncWork();
+  assert(createCalls.length === 1, "matching replacement alarm must survive later restarts");
+}
+
+function createMockElement() {
+  return {
+    hidden: false,
+    textContent: "",
+    value: "",
+    disabled: false,
+    className: "",
+    classList: {
+      toggle() {},
+      remove() {}
+    },
+    addEventListener() {},
+    replaceChildren() {},
+    appendChild() {}
+  };
+}
+
+async function validatePopupStorageRefresh() {
+  const elements = new Map();
+  const messages = [];
+  let storageChangeListener;
+  let removedStorageListener;
+  let unloadListener;
+
+  const documentMock = {
+    getElementById(id) {
+      if (!elements.has(id)) {
+        elements.set(id, createMockElement());
+      }
+      return elements.get(id);
+    },
+    createElement() {
+      return createMockElement();
+    }
+  };
+
+  const chromeMock = {
+    runtime: {
+      async sendMessage(message) {
+        messages.push(message.type);
+        if (message.type === "GET_STATUS") {
+          return {
+            ok: true,
+            currentTabCount: 0,
+            currentWindowCount: 0,
+            savedAt: null,
+            tabCount: null,
+            windowCount: null,
+            snapshotCount: 0,
+            backupIntervalMinutes: 5
+          };
+        }
+        if (message.type === "GET_SNAPSHOTS") {
+          return { ok: true, snapshots: [] };
+        }
+        return { ok: true };
+      }
+    },
+    storage: {
+      onChanged: {
+        addListener(listener) {
+          storageChangeListener = listener;
+        },
+        removeListener(listener) {
+          removedStorageListener = listener;
+        }
+      }
+    }
+  };
+
+  vm.runInNewContext(popupJs, {
+    chrome: chromeMock,
+    console,
+    document: documentMock,
+    window: {
+      addEventListener(eventName, listener) {
+        if (eventName === "unload") {
+          unloadListener = listener;
+        }
+      },
+      confirm() {
+        return false;
+      }
+    }
+  });
+  await flushAsyncWork();
+
+  assert(messages.filter((type) => type === "GET_STATUS").length === 1, "popup must load status initially");
+  assert(
+    messages.filter((type) => type === "GET_SNAPSHOTS").length === 1,
+    "popup must load snapshots initially"
+  );
+
+  storageChangeListener({ snapshots: { newValue: [] } }, "local");
+  await flushAsyncWork();
+
+  assert(
+    messages.filter((type) => type === "GET_STATUS").length === 2,
+    "snapshot storage changes must refresh popup status"
+  );
+  assert(
+    messages.filter((type) => type === "GET_SNAPSHOTS").length === 2,
+    "snapshot storage changes must refresh popup history"
+  );
+
+  unloadListener();
+  assert(
+    removedStorageListener === storageChangeListener,
+    "popup must remove its storage listener on unload"
+  );
+}
+
+(async () => {
+  await validateAlarmScheduling();
+  await validatePopupStorageRefresh();
+  console.log("Extension validation checks passed.");
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
