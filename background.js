@@ -35,6 +35,12 @@ async function scheduleAutoBackup(minutes) {
 
 async function ensureAutoBackupScheduled() {
   const minutes = await getBackupIntervalMinutes();
+  const existingAlarm = await chrome.alarms.get(AUTO_BACKUP_ALARM);
+
+  if (existingAlarm?.periodInMinutes === minutes) {
+    return minutes;
+  }
+
   return scheduleAutoBackup(minutes);
 }
 

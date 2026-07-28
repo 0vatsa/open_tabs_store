@@ -11,6 +11,7 @@ const feedbackEl = document.getElementById("feedback");
 const backupNowButton = document.getElementById("backup-now");
 
 const DEFAULT_BACKUP_INTERVAL_MINUTES = 5;
+const SNAPSHOTS_STORAGE_KEY = "snapshots";
 
 let currentBackupIntervalMinutes = DEFAULT_BACKUP_INTERVAL_MINUTES;
 
@@ -133,6 +134,16 @@ async function refreshAll() {
   await Promise.all([refreshStatus(), refreshSnapshots()]);
 }
 
+function handleStorageChange(changes, areaName) {
+  if (areaName !== "local" || !changes[SNAPSHOTS_STORAGE_KEY]) {
+    return;
+  }
+
+  refreshAll().catch((error) => {
+    showFeedback(error.message || "Failed to refresh backup status.", true);
+  });
+}
+
 async function saveBackupInterval() {
   const response = await sendMessage({
     type: "SET_BACKUP_INTERVAL",
@@ -215,6 +226,11 @@ backupNowButton.addEventListener("click", async () => {
   } finally {
     backupNowButton.disabled = false;
   }
+});
+
+chrome.storage.onChanged.addListener(handleStorageChange);
+window.addEventListener("unload", () => {
+  chrome.storage.onChanged.removeListener(handleStorageChange);
 });
 
 refreshAll().catch((error) => {
