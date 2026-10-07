@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Open Tabs Store</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand" id="brand"><span class="brand-name">Open Tabs Store</span></div>
+      <div class="topbar-actions">
+        <button
+          id="open-manager"
+          class="icon-btn"
+          type="button"
+          title="Open full view"
+          aria-label="Open full view"
+        ></button>
+        <button id="open-settings" class="icon-btn" type="button" title="Settings" aria-label="Settings"></button>
+      </div>
+    </header>
+
+    <main class="content">
+      <section id="status" class="status" aria-live="polite"></section>
+      <section id="restore-status" hidden></section>
+      <section id="hero" hidden></section>
+
+      <section class="history">
+        <div class="section-head">
+          <h2>History</h2>
+          <button id="save-now" class="btn btn-sm" type="button"></button>
+        </div>
+        <div id="history" class="history-list"></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <button id="footer-manager" class="footer-link" type="button"></button>
+      <span id="storage-note" class="muted num"></span>
+    </footer>
+
+    <aside id="settings" class="sheet" hidden aria-labelledby="settings-title" role="dialog">
+      <div class="sheet-head">
+        <h2 id="settings-title">Settings</h2>
+        <button id="close-settings" class="icon-btn" type="button" aria-label="Close settings"></button>
+      </div>
+      <div class="sheet-body">
+        <label class="setting">
+          <span class="setting-text">
+            <span class="setting-title">Checkpoint every</span>
+            <span class="setting-help">Changes are also saved within seconds.</span>
+          </span>
+          <select id="interval" class="select"></select>
+        </label>
+        <label class="setting">
+          <span class="setting-text">
+            <span class="setting-title">Load restored tabs on click</span>
+            <span class="setting-help">Keeps big restores fast and light.</span>
+          </span>
+          <input id="lazy" class="switch" type="checkbox" />
+        </label>
+        <label class="setting">
+          <span class="setting-text">
+            <span class="setting-title">Skip tabs that are already open</span>
+            <span class="setting-help">Avoids duplicates after the browser restores some tabs itself.</span>
+          </span>
+          <input id="skip-open" class="switch" type="checkbox" />
+        </label>
+        <div class="setting">
+          <span class="setting-text">
+            <span class="setting-title">Storage</span>
+            <span id="storage-detail" class="setting-help num"></span>
+          </span>
+          <button id="manage-data" class="btn btn-sm" type="button">Export &amp; import</button>
+        </div>
+      </div>
+    </aside>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

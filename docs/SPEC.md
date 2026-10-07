@@ -1,6 +1,6 @@
 # Open Tabs Store v2 — Revamp Spec
 
-Status: **Draft for review** · Target version: `2.0.0` · Supersedes: v1.2.0
+Status: **Implemented in 2.0.0** (see §10 for decisions and deviations) · Supersedes: v1.2.0
 
 This document covers three things:
 
@@ -359,3 +359,37 @@ PR 1 alone fixes the crash-restore failure, so it can ship first.
 5. **Q5: Browser smoke test.** Should CI run an end-to-end Playwright test (Chromium) in addition to unit tests? It needs a GitHub Actions workflow, which the repo doesn't have yet.
 6. **Q6: Visual direction.** The spec proposes a neutral slate UI with an indigo accent. Do you have a brand color or a reference extension whose look you like (e.g. OneTab, Session Buddy, Arc)?
 7. **Q7: Scope of manager page.** Is the full-page manager (search, diff) in scope for v2.0, or should v2.0 ship the popup only?
+
+---
+
+## 10. Decisions and implementation notes (2.0.0)
+
+Answers to §9:
+
+| Question | Decision |
+|---|---|
+| Q1 Target browsers | **Chrome and Brave only.** Firefox/LibreWolf support removed, so §3.9 and PR 5 are dropped. |
+| Q2 Retention / compatibility | Full revamp, **no v1 data migration** (§3.8 dropped). Retention as proposed in §3.4. |
+| Q3 Daily auto-export | No. Export is manual only, with no `downloads` permission. |
+| Q4 Toolbar badge | Red `!` only while backups are failing. No tab count. |
+| Q5/Q7 Scope | Full-page manager included. |
+| Q6 Visual direction | Neutral slate with an indigo accent, light and dark. |
+
+Where the build differs from the draft:
+
+- **New-session detection** uses `chrome.storage.session`, which the browser clears on restart, instead of
+  `runtime.onStartup`. It works no matter which event wakes the worker first and is idempotent if the worker is
+  killed mid-way. Reloading or updating the extension also counts as a new session. That is harmless: the popup only
+  offers "Restore previous session" when some of its tabs are *not* currently open.
+- **Shutdown guard:** `tabs.onRemoved` with `isWindowClosing` doesn't update the live session, so closing the browser
+  doesn't shrink the snapshot right before it is frozen. An empty capture never overwrites a non-empty live session.
+- **Browser-open time** advances only on checkpoint ticks, by at most 2× the interval per tick. Sleep and closed time
+  are not counted.
+- **Lazy restore** creates each tab, waits for its URL to commit, then calls `tabs.discard`. Verified in plain
+  Chromium. Note: `tabs.discard` segfaults Chromium while a DevTools/CDP client is attached to the tab, so the
+  Playwright e2e test turns lazy restore off. Unit tests cover the lazy path.
+- **Restore progress** lives in the `restoreStatus` storage key, so the popup and manager both show it, and it
+  survives the popup closing.
+- **Testing:** `npm test` (32 unit tests against an in-memory chrome.* fake), `npm run validate`, and
+  `tests/e2e/smoke.mjs` (real Chromium: open tabs → shut down → relaunch → popup offers previous session → restore
+  → manager search).
