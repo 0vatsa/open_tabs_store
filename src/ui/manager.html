@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Open Tabs Store</title>
+    <link rel="icon" href="../../icons/icon32.png" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="manager.css" />
+  </head>
+  <body>
+    <header class="appbar">
+      <div class="brand" id="brand"><span class="brand-name">Open Tabs Store</span></div>
+      <label class="search appbar-search">
+        <span class="sr-only">Search all snapshots</span>
+        <input
+          id="search"
+          class="input"
+          type="search"
+          placeholder="Search every snapshot by title or URL"
+          autocomplete="off"
+        />
+        <kbd class="kbd">/</kbd>
+      </label>
+      <div class="appbar-actions" id="appbar-actions">
+        <button id="save-now" class="btn" type="button"></button>
+        <button
+          id="open-settings"
+          class="icon-btn"
+          type="button"
+          title="Settings &amp; data"
+          aria-label="Settings and data"
+        ></button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <div id="status" class="side-status"></div>
+        <nav id="timeline" class="timeline" aria-label="Snapshots"></nav>
+      </aside>
+      <main id="detail" class="detail" tabindex="-1"></main>
+    </div>
+
+    <dialog id="settings-dialog" class="dialog" aria-labelledby="settings-title">
+      <form method="dialog" class="dialog-head">
+        <h2 id="settings-title">Settings &amp; data</h2>
+        <button id="close-settings" class="icon-btn" value="close" aria-label="Close"></button>
+      </form>
+      <div class="dialog-body">
+        <h3 class="group-title">Backups</h3>
+        <label class="setting">
+          <span class="setting-text">
+            <span class="setting-title">Checkpoint every</span>
+            <span class="setting-help">Tab changes are saved within seconds; checkpoints build the history.</span>
+          </span>
+          <select id="interval" class="select"></select>
+        </label>
+        <label class="setting">
+          <span class="setting-text">
+            <span class="setting-title">Load restored tabs on click</span>
+            <span class="setting-help">Only the active tab of each window loads right away.</span>
+          </span>
+          <input id="lazy" class="switch" type="checkbox" />
+        </label>
+        <label class="setting">
+          <span class="setting-text">
+            <span class="setting-title">Skip tabs that are already open</span>
+            <span class="setting-help">Avoids duplicates when the browser already reopened some tabs.</span>
+          </span>
+          <input id="skip-open" class="switch" type="checkbox" />
+        </label>
+
+        <h3 class="group-title">Storage</h3>
+        <div id="storage-stats" class="stats"></div>
+        <p class="setting-help retention-note">
+          History is kept by browser-open time, so nothing expires while the browser is closed. Kept: every checkpoint
+          from the last 2 hours, then one per 30 minutes for a day and one per hour for a week; the last 10 browser
+          sessions; and anything you saved manually, starred or imported.
+        </p>
+
+        <h3 class="group-title">Export &amp; import</h3>
+        <div class="data-actions">
+          <button id="export-all-json" class="btn" type="button"></button>
+          <button id="export-all-html" class="btn" type="button"></button>
+          <button id="import" class="btn" type="button"></button>
+          <input id="import-file" type="file" accept="application/json,.json" hidden />
+        </div>
+      </div>
+    </dialog>
+
+    <script type="module" src="manager.js"></script>
+  </body>
+</html>

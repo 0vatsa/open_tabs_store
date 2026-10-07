@@ -1,117 +1,90 @@
 # Open Tabs Store
 
-A lightweight browser extension that automatically backs up your open tab metadata to local browser storage and lets you restore your session after a crash.
+A Chrome / Brave extension that continuously backs up your open tabs and windows to local storage, so you can bring
+them back after a crash, even if the browser stays closed for days.
 
-## Features
+## What it does
 
-- Auto-saves tab URLs, titles, window layout, pinned tabs, and active tab per window on a configurable interval (default: every 5 minutes)
-- Keeps a rolling 24-hour snapshot history in `chrome.storage.local`
-- Manual **Backup now** snapshots are saved immediately and labeled separately from auto backups
-- Restore any stored snapshot from the popup history list
-- Works in Chromium browsers (Chrome, Brave) and Firefox-based browsers (Firefox, LibreWolf)
+- **Saves continuously.** Every tab change is written to a "live session" within a few seconds. A checkpoint is added
+  to the history on an interval (default 5 minutes), but only when something actually changed.
+- **Survives crashes.** When the browser starts, the last state of the previous session is frozen as a protected
+  **Previous session** snapshot. The popup offers to restore it with one click.
+- **Never expires while closed.** History is kept by browser-open time, not wall-clock time, so a crash before a
+  long weekend loses nothing.
+- **Restores properly.** Window order, pinned tabs, the active tab, tab groups (name, colour, collapsed), window
+  size and state all come back. Tabs load only when clicked, and tabs that are already open are skipped.
+- **Lets you pick.** Preview any snapshot, restore only selected tabs, or add them to the current window.
+- **Full-page manager.** A timeline of every snapshot grouped by browser session, search across all of history,
+  "+7 / −3 since last checkpoint" diffs, naming and starring snapshots, and export/import.
+- **Reports failures.** If saving ever fails, the popup shows a red banner and the toolbar icon gets a `!` badge.
+- **Local only.** Nothing leaves your machine. Export to JSON (re-importable), HTML or Markdown at any time.
 
 ## Install
 
-### Chrome
+1. Open `chrome://extensions` (or `brave://extensions`).
+2. Enable **Developer mode**.
+3. Click **Load unpacked** and select this folder.
 
-1. Open `chrome://extensions`
-2. Enable **Developer mode**
-3. Click **Load unpacked**
-4. Select this repository folder
+Pin the extension so its icon is always visible.
 
-### Brave
+## Using it
 
-1. Open `brave://extensions`
-2. Enable **Developer mode**
-3. Click **Load unpacked**
-4. Select this repository folder
+- **After a crash:** click the extension icon, then **Restore session** → confirm.
+- **Browse history:** click any snapshot in the popup to preview its tabs; tick tabs to restore just those.
+- **Full view:** the ↗ icon in the popup (or right-click the icon → *Options*) opens the manager. Press `/` to
+  search; use ↑/↓ to move through the timeline.
+- **Keep something forever:** star a snapshot, or use **Save now** (manual snapshots are never pruned).
+- **Back up off-browser:** Manager → settings (⚙) → **Export all (JSON)**. Import the same file later.
 
-### Firefox
+### Retention
 
-1. Open `about:debugging`
-2. Click **This Firefox**
-3. Click **Load Temporary Add-on…**
-4. Select `manifest.json` from this repository folder
+| What | Kept |
+|---|---|
+| Checkpoints from the last 2 h of browsing | all |
+| … up to 24 h of browsing | one per 30 min |
+| … up to 7 days of browsing | one per hour |
+| End-of-session snapshots | last 10 browser sessions |
+| Manual, starred, imported | until you delete them |
 
-### LibreWolf
+Total history is soft-capped at 25 MB. The oldest automatic checkpoints are dropped first.
 
-1. Open `about:debugging`
-2. Click **This Firefox**
-3. Click **Load Temporary Add-on…**
-4. Select `manifest.json` from this repository folder
+### Limitations
 
-Temporary add-ons in Firefox and LibreWolf expire when the browser restarts. Reload the extension from `about:debugging` after restarting.
-
-## Usage
-
-1. Keep the extension installed while you browse normally.
-2. The extension auto-saves a snapshot on your chosen interval (default: every 5 minutes).
-3. Click the extension icon to see:
-   - current tab/window counts
-   - last backup time
-   - backed up tab/window counts
-   - snapshot history with **Manual** and **Auto** labels
-   - an input to set the auto-backup interval in minutes
-4. Use **Backup now** before risky changes if you want an immediate manual snapshot.
-5. After a crash, pick the snapshot you want from the history list and click **Restore**.
-
-Restore opens new windows and does not close your current tabs.
-
-## What gets saved
-
-Per tab:
-
-- URL
-- Title
-- Pinned state
-- Active state
-- Tab index
-
-Per window:
-
-- Focused state
-- Window state (`normal`, `maximized`, `minimized`)
-- Ordered tab list
-
-Per snapshot:
-
-- Unique ID
-- Save timestamp
-- Source (`auto` or `manual`)
-- Full session data
-
-## Snapshot retention
-
-- Auto snapshots are created on a configurable minute interval (default: every 5 minutes). Set the interval in the popup; `1` means every minute, `5` means every 5 minutes.
-- Snapshots are kept for 24 hours from their save time.
-- Example: a snapshot saved at 13:14 on Aug 21 is removed at/after 13:14 on Aug 22.
-- Manual snapshots follow the same 24-hour retention rule.
-
-## Limitations
-
-- Incognito tabs are not backed up unless you explicitly allow the extension in incognito mode.
-- Internal browser URLs cannot be restored and are skipped, including:
-  - Chromium: `chrome://`, `brave://`, `edge://`, `devtools://`, and `chrome-extension://`
-  - Firefox/LibreWolf: `about:` (except `about:blank`), `moz-extension://`, `resource://`, and `jar:`
-- Upgrading from v1 migrates the previous single `latestBackup` entry into the new snapshot history.
-- Heavy browsing sessions may approach browser local storage limits over a full 24-hour window.
+- Browser pages (`chrome://`, `brave://`, extension pages) can't be reopened by extensions and are skipped on restore.
+- Incognito windows are never saved.
 
 ## Development
 
-No build step is required. Edit the files and reload the extension:
-
-- Chrome/Brave: click **Reload** on the extension card in `chrome://extensions` or `brave://extensions`
-- Firefox/LibreWolf: reload from `about:debugging` (temporary add-ons must be reloaded after a browser restart)
-
-Run validation checks with:
+No build step. The extension runs straight from `src/` as native ES modules.
 
 ```bash
-node scripts/validate-extension.js
+npm test                      # unit tests (node --test, in-memory fake of the chrome.* APIs)
+npm run validate              # manifest / file-reference / import checks
+node tests/e2e/smoke.mjs out/ # real-Chromium crash→restore run via Playwright, screenshots into out/
 ```
 
-## File overview
+After editing, click **Reload** on the extension card in `chrome://extensions`.
 
-- `manifest.json` — extension configuration
-- `background.js` — snapshot storage, auto-backup alarm, restore logic, and message handlers
-- `popup.html`, `popup.js`, `popup.css` — popup UI
-- `icons/` — extension icons
+### Layout
+
+```
+manifest.json
+src/background/   service worker: capture, checkpoints, retention, restore engine
+src/shared/       storage layer, snapshot schema/hashing, URL rules, export formats
+src/ui/           popup, full-page manager, shared components and design tokens
+tests/            unit tests + e2e smoke test
+docs/SPEC.md      design spec and audit of v1
+```
+
+### Storage layout (`chrome.storage.local`)
+
+| Key | Contents |
+|---|---|
+| `meta` | settings, health, browser-open-time clock |
+| `live` | current session, rewritten a few seconds after each tab change |
+| `index` | small summaries of every checkpoint (newest first) |
+| `snap:<id>` | full windows/tabs of one checkpoint |
+| `restoreStatus` | progress of the last restore |
+
+The current browser-session id lives in `chrome.storage.session`. That storage is cleared when the browser restarts,
+which is how a new session is detected.
